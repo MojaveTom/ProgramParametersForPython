@@ -34,7 +34,7 @@ referenced above affect this behavior:
                     overrides previous definitions.  Defaults as below.
 
 DEFAULT CONFIG PATHS:
-* Look for `ProgName+'*.ini'` in our directory
+* Look for `ProgName+'*.ini'` in our directory *(not including file extension, typically `.py`)*
 * Path as defined in the `PrivateConfig` environment variable.
 
 DEFAULT CONFIG SECTIONS (in order; later sections overriding earlier ones):
