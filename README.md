@@ -29,18 +29,18 @@ referenced above affect this behavior:
 * configPaths = a list of "glob" paths to files that will be read.
                     Any files that do not exist or don't parse ok will
                     be ignored.  Defaults as below.
-* configSections = a list of sections in the .ini file(s) from which
+* configSections = a list of sections in the `.ini` file(s) from which
                     to load values.  Last section with an option in it
                     overrides previous definitions.  Defaults as below.
 
 DEFAULT CONFIG PATHS:
-* Look for ProgName+'*.ini' in our directory
-* Path as defined in the "PrivateConfig" environment variable.
+* Look for `ProgName+'*.ini'` in our directory
+* Path as defined in the `PrivateConfig` environment variable.
 
 DEFAULT CONFIG SECTIONS (in order; later sections overriding earlier ones):
 *    [DEFAULT]
 *    [\<"LOCATION" evnironment variable>]
 *    [\<"HOST" evnironment variable>]
-*    [\<program name>] (including extension, typically ".py")
+*    [\<program name>] *(including extension, typically `.py`)*
 *    [\<program name>/\<"LOCATION" environment variable>]
 *    [\<program name>/\<"HOST" environment variable>]
