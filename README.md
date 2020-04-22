@@ -1,6 +1,18 @@
 # ProgramParametersForPython
 Functions to create program parameters from .toml, .json and .ini files, and to define and use command line options.
 
+## Installation
+Use this command to install on another machine:
+
+pip3 install --user -e git+https://github.com/MojaveTom/ProgramParametersForPython#egg=progparams
+
+Then start python3 from the command line; `import sys`; and `print(sys.path)`
+to see where pip put your installation.  Put that path in VSCode's
+python extra paths so the IDE can find the installation.
+
+This will clone the repository *somewhere*.  If you edit the sources, you
+can push the changes back to the repository.
+
 ## MakeParams(*args, **kwargs)
 MakeParams is a top level function to create a dictionary of parameters from a `.toml` or `.json` formatted parameter definition file and `.ini` default values files.
 

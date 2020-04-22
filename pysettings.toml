@@ -1,4 +1,9 @@
+# Use this command to install on another machine:
+# pip3 install --user -e git+https://github.com/MojaveTom/ProgramParametersForPython#egg=progparams
+# Then start python3 from the command line; import sys; and sys.path
+# to see where pip put your installation.  Put that path in VSCode's
+# python extra paths so the IDE can find the installation.
+
 [build-system]
 # Minimum requirements for the build system to execute.
 requires = ["setuptools", "wheel"]  # PEP 508 specifications.
-

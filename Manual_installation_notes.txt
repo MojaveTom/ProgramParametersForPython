@@ -1,0 +1,8 @@
+Use this command to install on another machine:
+pip3 install --user -e git+https://github.com/MojaveTom/ProgramParametersForPython#egg=progparams
+Then start python3 from the command line; import sys; and sys.path
+to see where pip put your installation.  Put that path in VSCode's
+python extra paths so the IDE can find the installation.
+
+This will clone the repository *somewhere*.  If you edit the sources, you
+can push the changes back to the repository.
