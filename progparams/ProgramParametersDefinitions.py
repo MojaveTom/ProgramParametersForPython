@@ -437,15 +437,15 @@ def createParams(paramDefs=None, *args, **kwargs):
         else:
             return None
 
-    class BlankLinesHelpFormatter (argparse.HelpFormatter):
-        # # add empty line if help ends with \n
-        # def _split_lines(self, text, width):
-        #     lines = super()._split_lines(text, width)
-        #     if text.endswith('\n'):
-        #         lines += ['']
-        #     return lines
-        def _split_lines(self, text, width):
-            return text.splitlines()
+    # class BlankLinesHelpFormatter (argparse.HelpFormatter):
+    #     # # add empty line if help ends with \n
+    #     # def _split_lines(self, text, width):
+    #     #     lines = super()._split_lines(text, width)
+    #     #     if text.endswith('\n'):
+    #     #         lines += ['']
+    #     #     return lines
+    #     def _split_lines(self, text, width):
+    #         return text.splitlines()
 
     progDescription = paramDefs.get('ProgramDescription') or ""   #  Used for help text only.
 
