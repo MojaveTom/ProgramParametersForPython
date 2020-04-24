@@ -35,163 +35,12 @@ logger = logging.getLogger(__name__)
 debug = logger.debug
 critical = logger.critical
 info = logger.info
-logger.setLevel('NOTSET')
-console = logging.getLogger("ConsoleLogger")
+logger.setLevel('DEBUG')
 
 MyPath = os.path.dirname(os.path.realpath(__file__))
 logger.debug(f'MyPath in ProgramParametersDefinitions is: {MyPath}')
 ProgName, ext = os.path.splitext(os.path.basename(sys.argv[0]))
 ProgPath = os.path.dirname(os.path.realpath(sys.argv[0]))
-
-'''
-#########################################
-The class below might be replaced by one of these packages:
-> pip3 install pydantic[email,typing_extensions,dotenv]
-pydantic seems way overkill for what I want.
-- or -
-> pip3 install prodict
-prodict is a worthy option; only thing is, it doesn't
-keep the initialization dict up-to-date with mods to
-the prodict version.  Trying prodict...
-
-I'm not happy with my ProgramParameters class; it seems
-kinda a kludge, especially in __getattribute__, but it
-does keep the underlying dictionary up-to-date with mods
-to dotted references to the instance.
-#########################################'''
-# class ProgramParameters(object):
-#     """Simple object for storing attributes.
-#     Provides a simple string representation.
-#     setAttributesFromDict function sets attributes.
-#     """
-
-#     def __init__(self, attrDict=None):
-#         # print(f"In __init__")
-#         self._theDict = dict()      # empty dictionary
-#         if attrDict is not None:
-#             self.setAttributesFromDict(attrDict)
-
-#     def setAttributesFromDict(self, attrDict):
-#         # print(f"In setAttributesFromDict")
-#         self._theDict = attrDict
-#         for name, val in attrDict.items():
-#             setattr(self, name, val)
-
-#     def setattr(self, name, val):
-#         '''
-#         This func called when the client program calls does <ProgramParameters instance>.setattr(<name>, <val>)
-#         and this in turn calls __setattr__
-#         '''
-#         # print(f"In setattr")
-#         self._theDict[name] = val
-#         # print(f"in setattr, _theDict becomes {self._theDict}")
-#         setattr(self, name, val)
-
-#     def __setattr__(self, name, val):
-#         '''
-#         __setattr__ is called when the client program calls does an assignment <ProgramParameters instance>.attrib = val
-#          OR when the client program calls does <ProgramParameters instance>.setattr(<name>, <val>) {which calls us}
-#         '''
-#         myself = self           #object.__getattribute__(self, 'self')
-#         # print(f"in __setattr__, args are {myself}, {name}, {val}")
-#         super().__setattr__(name, val)
-#         mydict = object.__getattribute__(self, '_theDict')
-#         ## Don't put _theDict in _theDict; otherwise keep _theDict up to date with the attributes.
-#         if (mydict is not None) and (not name == '_theDict'): mydict[name] = val
-#         # print(f"in __setattr__, _theDict becomes {mydict}")
-
-#     ######  What we want to accomplish is to return the attribute with the _theDict object of the
-#     ######      same name, even it the dictionary item was assigned a value elsewhere.
-#     ###  This function overrides the object.__getattribute__ but I haven't figured out how to make
-#     ###   everything work with this enabled.  Calls to object.__getattribute__(self, '<name>') are
-#     ###   supposed to keep down infinite recursion; I just don't know where-all to do it.
-#     def __getattribute__(self, name):
-#         myself = self           #object.__getattribute__(self, 'self')
-#         retval =object.__getattribute__(self, name)     #  Hopefully just to super function.
-#         mydict = None
-#         moduleDict = object.__getattribute__(self, '__dict__')
-#         # print(f"in __getattribute__, args are self, {name}; moduleDict is: {moduleDict}")
-
-#         if '_theDict' in moduleDict.keys():
-#             mydict = object.__getattribute__(self,'_theDict')
-#             # print(f"Got _theDict: {mydict}")
-#         ## get the value from _theDict.
-#         if (mydict is not None) and (not name == '_theDict'):
-#             if name in mydict:
-#                 retval = mydict[name]
-#         return retval
-
-#     def __getattr__(self, name):
-#         '''
-#         __getattr__ is called when the client program calls <ProgramParameters instance>.get(...)
-#         but NOT when the client program references <ProgramParameters instance>.<attrib>
-#         '''
-#         myself = self           #object.__getattribute__(self, 'self')
-#         # print(f"in __getattr__, args are self, {name}")
-#         mydict = object.__getattribute__(self,'_theDict')
-#         # print(f"in __getattr__, _theDict is: {mydict}")
-#         retval = None    # set the default value.
-#         ## get the value from _theDict.
-#         if (mydict is not None) and (not name == '_theDict'):
-#             if name in mydict:
-#                 retval = mydict[name]
-#         # print(f"in __getattr__, returning {retval}")
-#         return retval
-
-#     def __get__(self, name):
-#         ''' __get__ is not called;
-#         __getattr__ is called when the client program calls <ProgramParameters instance>.get(...)
-#         but NOT when the client program references <ProgramParameters instance>.<attrib>
-#         '''
-#         # print(f"in __get__, args are self, {name}")
-#         mydict = object.__getattribute__(self,'_theDict')
-#         # print(f"in __get__, _theDict is: {mydict}")
-#         retval = None    # set the default value.
-#         ## get the value from _theDict.
-#         if (mydict is not None) and (not name == '_theDict'):
-#             if name in mydict:
-#                 retval = mydict[name]
-#         # print(f"in __get__, returning {retval}")
-#         return retval
-
-#     def get(self, attrName, fallBack=None):
-#         ''' get is not called;
-#         __getattr__ is called when the client program calls <ProgramParameters instance>.get(...)
-#         '''
-#         retval = getattr(self, attrName, fallBack)
-#         if retval is None: retval = fallBack
-#         return retval
-
-#     def __contains__(self, key):
-#         if isinstance(key, str): return key in self.__dict__
-#         if isinstance(key, set): return key <= set(self.__dict__)
-#         if isinstance(key, frozenset): return key <= set(self.__dict__)
-#         else: return False
-
-#     def __repr__(self):
-#         type_name = type(self).__name__
-#         arg_strings = ['{may not agree with individual attributes}', ]
-#         star_args = {}
-#         for arg in self._get_args():
-#             arg_strings.append(repr(arg))
-#         for name, value in self._get_kwargs():
-#             ## Don't put _theDict in the representation.
-#             if not name == '_theDict':
-#                 if name.isidentifier():
-#                     arg_strings.append('%s=%r' % (name, value))
-#                 else:
-#                     star_args[name] = value
-#         if star_args:
-#             arg_strings.append('**%s' % repr(star_args))
-#         return '%s(%s)' % (type_name, ', '.join(arg_strings))
-
-#     def _get_kwargs(self):
-#         d = self.__dict__
-#         # d.pop('_theDict', None)
-#         return d.items()
-
-#     def _get_args(self):
-#         return []
 
 #############  GetConfig
 def GetConfig(**kwargs):
@@ -272,20 +121,39 @@ DEFAULT CONFIG SECTIONS (in order; later sections overriding earlier ones):
 # Doesn't work to put schema definition in a JSON file
 # since some of the keys are class objects defined in schema.
 # Can't pickle ppds either.
-
+validArgParserActions = ("store", "store_const", "store_true", "store_false"
+                        , "append", "append_const", "count", "extend")
+# validArgParserActions = ("'store'", "'store_const'", "'store_true'", "'store_false'"
+#                         , "'append'", "'append_const'", "'count'", "'extend'")
 ppds = {
         Optional('ProgramDescription', default=None): str,
-            'Parameters': [{'paramName': str
+        Optional('PositionalArgParserArgs', default=None): {
+              'paramName': str
+            , 'action': str
+            , Optional('nargs'): str
+            , Optional('help'): str
+            },
+        'Parameters': [{'paramName': str
             , 'description': str
+            , Optional('intermediate'): Use(bool)       # intermediate params are for defining others and will be deleted from final dictionary.
             , Optional('configName', default=None): Use(str.casefold)       # make sure all configNames are lower case.
             , Optional('default', default=None): Use(str)
             , Optional('type'): Use(str)
-            , Optional('argParserArgs', default=None): { Optional('short', default=None): And(str, lambda s: s != '-h', error="The short command option '-h' is reserved for help.")
-                        , Optional('long', default=None): And(str, lambda s: s != '--help', error="The long command option '--help' is reserved for help.")
-                        , 'dest': str
-                        , 'action': str
-                        }
-            } ]
+            , Optional('argParserArgs', default=None):
+                { Optional('short', default=None): And(str, lambda s: s != '-h', error="The short command option '-h' is reserved for help.")
+                , Optional('long', default=None): And(str, lambda s: s != '--help', error="The long command option '--help' is reserved for help.")
+                , Optional('dest'): str
+                , Optional('action'): And(str, lambda k: k in validArgParserActions, error=f"Argparser action not one of {validArgParserActions}")
+                , Optional("default"): object
+                , Optional('nargs'): str
+                , Optional('const'): str
+                , Optional('type'): str
+                , Optional('choices'): str
+                , Optional('required'): And(str, lambda k: k in ('True', 'False'), error=f'Argparser "required" must be "True" or "False".')
+                , Optional('help'): str
+                , Optional('metavar'): str
+                }
+        } ]
         }
 
 # ppds = [{'paramName': str
@@ -319,6 +187,19 @@ Get a couple command line arguments before proceeding:
 
 --configSections defines a list of "sections" in the .ini files to process.
 '''
+
+    '''
+    keyword arguments recognized:
+    loggingLevel        => set logger to this level
+    ParamPath           => alternate to setting ParamPath from command line option
+    configPaths         => alternate to setting configPaths from command line option
+    configSections      => alternate to setting configSections from command line option
+    paramDefs           => Use this dictionary for parameter definitions instead of reading from a file.
+    ProgramDocString    => Additional documentation to include in the help message.
+'''
+
+    if kwargs.get('loggingLevel') is not None:
+        logger.setLevel(kwargs.get('loggingLevel'))
 
     TempParser = argparse.ArgumentParser(add_help=False)
 
@@ -449,15 +330,14 @@ def createParams(paramDefs=None, *args, **kwargs):
 
     progDescription = paramDefs.get('ProgramDescription') or ""   #  Used for help text only.
 
-    ## The rest of the function deals with the list of parameters under the key 'Parameters'
-    paramDefs = paramDefs.get('Parameters')
-
     progEpilog = ""
-    ## Was hoping to use ArgumentParser(epilog=str) to give more information from
-    ## GetConfig using its __doc__ string, but ArgumentParser strips formatting from
-    ## epilog string, so the additional info is useless.
+    ######## Was hoping to use ArgumentParser(epilog=str) to give more information from
+    ######## GetConfig using its __doc__ string, but ArgumentParser strips formatting from
+    ######## epilog string, so the additional info is useless.
+    ## --- FIXED ---: Use    argparse.ArgumentParser(..., formatter_class=argparse.RawDescriptionHelpFormatter, ... )
+
     if GetConfig.__doc__ is not None:
-        # console.info(GetConfig.__doc__)   # shows what it really looks like
+        # debug.info(GetConfig.__doc__)   # shows what it really looks like
         progEpilog += f'{GetConfig.__doc__}'
     if kwargs.get("ProgramDocString") is not None:
         progEpilog += kwargs.get('ProgramDocString')
@@ -469,6 +349,29 @@ def createParams(paramDefs=None, *args, **kwargs):
         , formatter_class=argparse.RawDescriptionHelpFormatter
         , epilog = progEpilog
         )
+
+    if sys.version_info < (3,8):
+        #  Defines "extend" action for argparse which was introduced in python3.8
+        class ExtendAction(argparse.Action):
+            def __call__(self, parser, namespace, values, option_string=None):
+                items = getattr(namespace, self.dest) or []
+                items.extend(values)
+                setattr(namespace, self.dest, items)
+
+        parser.register('action', 'extend', ExtendAction)
+
+    debug(f"Adding any PositionalArgParserArgs to parser.")
+    if paramDefs.get('PositionalArgParserArgs') is not None:
+        debug(f"There is a PositionalArgParserArgs section of the parameters.")
+        p = paramDefs.get('PositionalArgParserArgs')
+        cmdArg = [f"{p.pop('paramName')!r}", ]     # get param name which is guaranteed to exist by validation
+        # Make sure paramName is first argument to add_argument.
+        for (k, v) in p.items():
+            if v is not None:
+                cmdArg.append(f"{k}={v!r}")
+        cmdArg = ", ".join(cmdArg)
+        debug(f"Executing parser.add_argument({cmdArg})")
+        exec(f"parser.add_argument({cmdArg})")
     parser.add_argument("--ParamPath", action="append", nargs="+", type=str
         , help='Give multiple times to make a list of paths to .toml or .jsonc or .json parameter definition files.  The first successful load wins.\n')
     parser.add_argument("--configPaths", action="append", nargs="+", type=str
@@ -486,59 +389,86 @@ def createParams(paramDefs=None, *args, **kwargs):
     ## and creating program command line options for them (if so specified in the paramDef).
     #### "createdParams" is used as the "local" variables in the exec statements below; this
     #### allows us to create parameters in the exec statement and give them values.
-    for p in paramDefs:
-        debug(f"\nInitial definition of parameter {p['paramName']}, setting default value.")
+    for p in paramDefs.get('Parameters'):
+            ## The rest of the function deals with the list of parameters under the key 'Parameters'
+        paramName = p['paramName']
+        if p.get('intermediate') is not None:
+            if p['intermediate']:
+                localOnlyKeys.append(paramName)
+                debug(f"Intermediate param {paramName} will be removed from final dictionary.")
+        debug(f"\nInitial definition of parameter {paramName}, setting default value.")
         if p.get('default') is not None:
             if p.get('type') is not None:
-                arg = f'''{p['paramName']} = {p['type']}({p['default']!r})'''
+                arg = f'''{paramName} = {p['type']}({p['default']!r})'''
             else:
-                arg = f'''{p['paramName']} = {p['default']}'''
+                arg = f'''{paramName} = {p['default']}'''
             debug(f'exec({arg})')
             exec(arg, globals(), createdParams)
         else:
-            createdParams[p['paramName']] = None
-        debug(f"Created param {p['paramName']} as {createdParams[p['paramName']]}.")
+            createdParams[paramName] = None
+        debug(f"Created param {paramName} as {createdParams[paramName]}.")
 
+        addArg = '''try:
+    parser.add_argument({cmdArg})
+except:
+    logger.warning('Parser options for parameter "{paramName}" could not be added; Ignored.')
+    raise
+pass
+'''
         ## Now that the parameter is created with its default value, see if we need a command line option for it.
         a = p.get('argParserArgs')
         if a is not None:
-            debug(f"Adding '{p['paramName']}' to argparse")
-            cmdArg = list()
+            debug(f"Adding '{paramName}' to argparse")
             #  schema validation does not guarantee at least one of these, so we do it here.
-            if a.get('short') is not None: cmdArg.append(f"'{a['short']}'")
-            if a.get('long')  is not None: cmdArg.append(f"'{a['long']}'")
-            ## This next is for non-optional command line args, but it is too ambiguous to use (order is important, etc.).
-            # if a.get('cmdArg') is not None: cmdArg.append(f"'{a['cmdArg']}'")
-            if len(cmdArg) == 0:
+            if (a.get('short') is None) and (a.get('long')  is None):
                 critical(f'One of argParserArgs options in "short" or "long" form must be present and not None: {p!r}')
-                return None
-            cmdArg = ', '.join(cmdArg)
-            #  If there is no description, leave it out of add_argument.
-            descrip = p.get('description')
-            des = ''
-            if descrip is not None:
-                des = f', help={descrip!r}'
+                logger.warning(f"This command line option will not be processed.")
+                continue
+            cmdArg = list()
+            # Special add_argument key processing ...
+            if a.get('short') is not None:          # This is not a keyword argument, just put it in as is.
+                cmdArg.append(f"{a.pop('short')!r}")       # put in short option and remove from {a}
+            if a.get('long') is not None:           # This is not a keyword argument, just put it in as is.
+                cmdArg.append(f"{a.pop('long')!r}")        # put in long option and remove from {a}
             #  For some reason add_argument barfs if a type is specified and one of these store kinds is used.
-            typ = ''
-            if a['action'] not in ('store_const', 'store_true', 'store_false'):
-                typ = f', type={p["type"]}'
+            if (a.get('action') is not None) and (a['action'] in ('store_const', 'store_true', 'store_false')):
+                if a.get('type') is not None:
+                    a.pop('type')               # In this case, remove the "type" keyword
+
+            if (a.get('help') is None) and (p.get('description') is not None):
+                a['help'] = f"{p['description']!r}"        # Default the help string from parameter description
+            #  Add keyword arguments to the list of add_argument args
+            for (k, v) in a.items():                # add other keyword arguments to arg list.
+                if v is not None:
+                    if k in ("type", "required"):       #  argparser add_argument keywords that do not take strings.
+                        cmdArg.append(f"{k}={v}")
+                    else:
+                        cmdArg.append(f"{k}={v!r}")
             ## put together the whole add_argument call
-            arg = f'''parser.add_argument({cmdArg}, dest={a['dest']!r}, action={a['action']!r}{typ}{des})'''
+            cmdArg = ', '.join(cmdArg)
+            arg = addArg.format(cmdArg=cmdArg, a=a, paramName=paramName)
             debug(f'exec({arg})')
-            exec(arg, globals(), createdParams)
+            try:
+                exec(arg, globals(), createdParams)
+                logger.debug(f'Successfully added command line argument option for "{paramName}""')
+            except Exception as e:
+                logger.warning(f"Trying to add arg had an exception: {e}")
+                pass
 
-    createdParams['args'] = createdParams['parser'].parse_args()
+    debug(f"Argument parser help is:\n\n{createdParams['parser'].format_help()}")
+    createdParams['args'], leftOverArgs = createdParams['parser'].parse_known_args()
     localOnlyKeys.append('args')
-    # debug(createdParams['args'])
+    if len(leftOverArgs) > 0:
+        logger.warning(f"These command line args were ignored: {leftOverArgs!r}")
+    debug(createdParams['args'])
 
-    # debug(f"Argument parser help is:  {createdParams['parser'].format_help()}")
 
     debug(f"CreatedParams before applying the config params and command line options: {createdParams!r}")
     #### if there is no configuration option for the item, it won't be set from the config file; it will be left as its default.
 
     debug(f"\n\nApplying values from config file, then from program arguments.")
     try:
-        for p in paramDefs:
+        for p in paramDefs.get('Parameters'):
             paramName = p['paramName']
             debug(f"Looking for config & option for: {paramName} ({createdParams[paramName]})")
             a = p.get('argParserArgs')
@@ -553,7 +483,7 @@ def createParams(paramDefs=None, *args, **kwargs):
                     arg = f'''{paramName} = {t}({cfgVal!r})'''
                     debug(f'exec({arg})')
                     exec(arg, globals(), createdParams)
-                    debug(f"{p['paramName']} is %s"%eval(f"{p['paramName']}", globals(), createdParams))
+                    debug(f"{paramName} is %s"%eval(f"{paramName}", globals(), createdParams))
                 else: debug(f"Config file has no option for {configName}")
             else: debug(f"There is no configName option for parameter {paramName}, don't look in config file.")
             # if the parameter is specified on the command line, it overrides the config file
@@ -565,7 +495,7 @@ def createParams(paramDefs=None, *args, **kwargs):
 else: debug("There is no cmd option given for {paramName}")"""
                 debug(f'exec({arg})')
                 exec(arg, globals(), createdParams)
-                debug(f"{p['paramName']} is %s"%eval(f"{p['paramName']}", globals(), createdParams))
+                debug(f"{paramName} is %s"%eval(f"{paramName}", globals(), createdParams))
             else: debug(f"No command line option defined for {paramName}")
     except UserWarning as w:
         logger.warning(w)
