@@ -35,7 +35,12 @@ logger = logging.getLogger(__name__)
 debug = logger.debug
 critical = logger.critical
 info = logger.info
-logger.setLevel('DEBUG')
+
+def setLoggingLevel(loggingLevel):
+    #  We know about all the loggers defined for this module;
+    #  so we can set the level for all of them here in one place.
+    logger.setLevel(loggingLevel)
+setLoggingLevel('DEBUG')
 
 MyPath = os.path.dirname(os.path.realpath(__file__))
 logger.debug(f'MyPath in ProgramParametersDefinitions is: {MyPath}')
@@ -199,7 +204,79 @@ Get a couple command line arguments before proceeding:
 '''
 
     if kwargs.get('loggingLevel') is not None:
-        logger.setLevel(kwargs.get('loggingLevel'))
+        setLoggingLevel(kwargs.get('loggingLevel'))
+
+    BoilerPlateArgs = toml.loads('''##  These argparser args are evaluated before the Parameters
+##  since they may affect relavent paths and verbosity.
+#  These are added the the primary arg parser only to document
+#    them in the help message.
+[[BoilerPlateArgParserArgs]]
+paramName = "ParamPath"
+long = "--ParamPath"
+dest = "ParamPath"
+action = "append"
+nargs = "+"
+type = "str"
+help = "Give multiple times to make a list of paths to .toml or .jsonc or .json parameter definition files.  The first successful load wins."
+
+[[BoilerPlateArgParserArgs]]
+paramName = "configPaths"
+dest = "configPaths"
+long = "--configPaths"
+action = "append"
+nargs = "+"
+type = "str"
+help = "Give multiple times to make a list of paths to configuration .ini files."
+
+[[BoilerPlateArgParserArgs]]
+paramName = "configSections"
+dest = "configSections"
+long = "--configSections"
+action = "append"
+nargs = "+"
+type = "str"
+help = "Give multiple times to make a list of configuration sections to load from .ini files."
+
+# logger.setLevel(DefaultLoggingLevel - Verbosity*VerbosityLevelMultiplier + Quietude*VerbosityLevelMultiplier)
+[[BoilerPlateArgParserArgs]]
+paramName = "DefaultLoggingLevel"
+long = "--DefaultLoggingLevel"
+type = "int"
+help = "Verbosity level starting point for Verbosity."
+default = "logging.INFO"
+dest = "DefaultLoggingLevel"
+action = "store"
+
+[[BoilerPlateArgParserArgs]]
+paramName = "Verbosity"
+type = "int"
+help = "Increase verbosity, higher is more."
+default = 0
+short = "-v"
+long = "--verbosity"
+dest = "Verbosity"
+action = "count"
+
+[[BoilerPlateArgParserArgs]]
+paramName = "Quietude"
+type = "int"
+help = "Decrease verbosity; more times given, the less verbosity."
+default = 0
+short = "-q"
+long = "--quiet"
+dest = "Quietude"
+action = "count"
+
+[[BoilerPlateArgParserArgs]]
+# Value determined by examining https://docs.python.org/3/library/logging.html#logging-levels
+paramName = "VerbosityLevelMultiplier"
+type = "int"
+help = "The difference in various logging levels. (Modify at your own risk.)"
+default = 10
+action = "store"
+long = "--VerbosityLevelMultiplier"
+''')['BoilerPlateArgParserArgs']
+##  After all this, BoilerPlateArgs is a list of things to put in our arg parser.
 
     TempParser = argparse.ArgumentParser(add_help=False)
 
@@ -222,11 +299,61 @@ Get a couple command line arguments before proceeding:
     argparse processes the "=" form such that all the string past the "=" is the value including
     any spaces that were quoted on the command line.
     '''
-    TempParser.add_argument("--configPaths", action="extend", nargs="+", type=str)
-    TempParser.add_argument("--configSections", action="extend", nargs="+", type=str)
-    TempParser.add_argument("--ParamPath", action="extend", nargs="+", type=str)
+
+    addArg = '''try:
+    TempParser.add_argument({cmdArg})
+except:
+    logger.warning('Parser options for parameter "{paramName}" could not be added; Ignored.')
+    raise
+pass
+'''
+    for a in BoilerPlateArgs:
+        paramName = a['paramName']
+        debug(f"Adding '{paramName}' to argparse")
+        #  Guarantee at least one of these.
+        if (a.get('short') is None) and (a.get('long')  is None):
+            critical(f'One of argParserArgs options in "short" or "long" form must be present and not None: {a!r}')
+            logger.warning(f"This command line option will not be processed.")
+            continue
+        cmdArg = list()
+        # Special add_argument key processing ...
+        if a.get('short') is not None:          # This is not a keyword argument, just put it in as is.
+            cmdArg.append(f"{a.pop('short')!r}")       # put in short option and remove from {a}
+        if a.get('long') is not None:           # This is not a keyword argument, just put it in as is.
+            cmdArg.append(f"{a.pop('long')!r}")        # put in long option and remove from {a}
+        #  For some reason add_argument barfs if a type is specified and one of these store kinds is used.
+        if (a.get('action') is not None) and (a['action'] in ('store_const', 'store_true', 'store_false')):
+            if a.get('type') is not None:
+                a.pop('type')               # In this case, remove the "type" keyword
+        #  Add keyword arguments to the list of add_argument args
+        for (k, v) in a.items():                # add other keyword arguments to arg list.
+            if v is not None:
+                if k in ("type", "required"):       #  argparser add_argument keywords that do not take strings.
+                    cmdArg.append(f"{k}={v}")
+                else:
+                    cmdArg.append(f"{k}={v!r}")
+        ## put together the whole add_argument call
+        cmdArg = ', '.join(cmdArg)
+        arg = addArg.format(cmdArg=cmdArg, a=a, paramName=paramName)
+        debug(f'exec({arg})')
+        try:
+            exec(arg)
+            logger.debug(f'Successfully added command line argument option for "{paramName}""')
+        except Exception as e:
+            logger.warning(f"Trying to add arg had an exception: {e}")
+            pass
+
+    # TempParser.add_argument("--configPaths", action="extend", nargs="+", type=str)
+    # TempParser.add_argument("--configSections", action="extend", nargs="+", type=str)
+    # TempParser.add_argument("--ParamPath", action="extend", nargs="+", type=str)
+    # TempParser.add_argument("--DefaultLoggingLevel", action="store", type=int, default=logging.INFO)
+    # TempParser.add_argument("-v", "--verbosity", dest="verbosity", action="count", type=int, default=0)
+    # TempParser.add_argument("-q", "--quiet", dest="Quietude", action="count", type=int, default=0)
+    # VerbosityLevelMultiplier = 10
+
+
     cmdArgs, leftOverArgs = TempParser.parse_known_args()      # get these config options
-    debug(f"The configPaths and ParamPath options are: {cmdArgs}")
+    debug(f"The BoilerPlateArgs options are: {cmdArgs}")
     debug(f"The (so far) unprocessed command line options are: {leftOverArgs}")
     ## Re-create sys.argv without the options that we have already processed.
     ## This will prevent errors if later command line processing doesn't recognize them.
@@ -235,16 +362,29 @@ Get a couple command line arguments before proceeding:
     TempPath = [sys.argv[0], ]      # get the first argument to program, the program path
     TempPath.extend(leftOverArgs)   # put all the others on the end.
     sys.argv = TempPath             # Recreate sys.argv, without the ones we may have captured.
+
     ## If any of these options exist, include them in kwargs so others will get them too.
-    if cmdArgs.configPaths is not None: kwargs['configPaths'] = cmdArgs.configPaths
-    if cmdArgs.configSections is not None: kwargs['configSections'] = cmdArgs.configSections
-    if cmdArgs.ParamPath is not None: kwargs['ParamPath'] = cmdArgs.ParamPath
-    debug(f"kwargs['configPaths'] is {kwargs.get('configPaths')}")
-    debug(f"kwargs['configSections'] is {kwargs.get('configSections')}")
-    debug(f"kwargs['ParamPath'] is {kwargs.get('ParamPath')}")
+    for a in BoilerPlateArgs:
+        paramName = a.pop('paramName')
+        if (kwargs.get(paramName) is None) and (cmdArgs[a['dest']] is not None):
+            kwargs[paramName] = cmdArgs[a['dest']]
+        debug(f"kwargs['{paramName}'] is {kwargs.get(f'{paramName}')}")
+    kwargs['BoilerPlateArgs'] = BoilerPlateArgs
+
+    #  Set logging level according to kwargs & cmd line options.
+    if kwargs['loggingLevel'] is None: kwargs['loggingLevel'] = kwargs['DefaultLoggingLevel']
+    kwargs['loggingLevel'] = kwargs['loggingLevel'] - (kwargs['Verbosity'] + kwargs['Quietude']) * kwargs['VerbosityLevelMultiplier']
+    setLoggingLevel(kwargs.get('loggingLevel'))
+    debug(f"After initial processing, MakeParams has kwargs: {kwargs}")
+    # if cmdArgs.configPaths is not None: kwargs['configPaths'] = cmdArgs.configPaths
+    # if cmdArgs.configSections is not None: kwargs['configSections'] = cmdArgs.configSections
+    # if cmdArgs.ParamPath is not None: kwargs['ParamPath'] = cmdArgs.ParamPath
+    # debug(f"kwargs['configPaths'] is {kwargs.get('configPaths')}")
+    # debug(f"kwargs['configSections'] is {kwargs.get('configSections')}")
+    # debug(f"kwargs['ParamPath'] is {kwargs.get('ParamPath')}")
 
     paramDefs = kwargs.get('paramDefs')
-    if paramDefs is None:   # Only go read the file is we didn't get paramDefs as a keyword argument
+    if paramDefs is None:   # Only go read the file if we didn't get paramDefs as a keyword argument
         if kwargs.get('ParamPath') is not None:
             fns = kwargs['ParamPath']
             if isinstance(fns, str): fns = (fns,)
@@ -288,6 +428,9 @@ Get a couple command line arguments before proceeding:
     return createParams(paramDefs, *args, **kwargs)  #  CreateParams returns None if given None
 
 def ValidateParamDefs(paramDefs=None, *args, **kwargs):
+    if kwargs.get('loggingLevel') is not None:
+        setLoggingLevel(kwargs.get('loggingLevel'))
+
     if paramDefs is None:
         if kwargs.get('paramDefs')is not None:
             paramDefs = kwargs['paramDefs']
@@ -312,6 +455,9 @@ def createParams(paramDefs=None, *args, **kwargs):
                         as a validated parameter definition dictionary.
     Calls GetConfig with kwargs argument to load a dictionary of configuration options.
     '''
+    if kwargs.get('loggingLevel') is not None:
+        setLoggingLevel(kwargs.get('loggingLevel'))
+
     if paramDefs is None:
         if kwargs.get('paramDefs')is not None:
             paramDefs = kwargs['paramDefs']
@@ -372,12 +518,20 @@ def createParams(paramDefs=None, *args, **kwargs):
         cmdArg = ", ".join(cmdArg)
         debug(f"Executing parser.add_argument({cmdArg})")
         exec(f"parser.add_argument({cmdArg})")
-    parser.add_argument("--ParamPath", action="append", nargs="+", type=str
-        , help='Give multiple times to make a list of paths to .toml or .jsonc or .json parameter definition files.  The first successful load wins.\n')
-    parser.add_argument("--configPaths", action="append", nargs="+", type=str
-        , help='Give multiple times to make a list of paths to configuration ".ini" files.\n')
-    parser.add_argument("--configSections", action="append", nargs="+", type=str
-        , help='Give multiple times to make a list of configuration sections to load from .ini files.\n')
+
+    # parser.add_argument("--ParamPath", action="append", nargs="+", type=str
+    #     , help='Give multiple times to make a list of paths to .toml or .jsonc or .json parameter definition files.  The first successful load wins.\n')
+    # parser.add_argument("--configPaths", action="append", nargs="+", type=str
+    #     , help='Give multiple times to make a list of paths to configuration ".ini" files.\n')
+    # parser.add_argument("--configSections", action="append", nargs="+", type=str
+    #     , help='Give multiple times to make a list of configuration sections to load from .ini files.\n')
+    addArg = '''try:
+    parser.add_argument({cmdArg})
+except:
+    logger.warning('Parser options for parameter "{paramName}" could not be added; Ignored.')
+    raise
+pass
+'''
 
     createdParams = { 'parser': parser
             , 'cfg': GetConfig(**kwargs)}   # configPaths passed as keyword arg if not default.
@@ -408,13 +562,6 @@ def createParams(paramDefs=None, *args, **kwargs):
             createdParams[paramName] = None
         debug(f"Created param {paramName} as {createdParams[paramName]}.")
 
-        addArg = '''try:
-    parser.add_argument({cmdArg})
-except:
-    logger.warning('Parser options for parameter "{paramName}" could not be added; Ignored.')
-    raise
-pass
-'''
         ## Now that the parameter is created with its default value, see if we need a command line option for it.
         a = p.get('argParserArgs')
         if a is not None:
@@ -454,6 +601,42 @@ pass
             except Exception as e:
                 logger.warning(f"Trying to add arg had an exception: {e}")
                 pass
+    for a in kwargs['BoilerPlateArgs']:
+        paramName = a.pop('paramName')
+        debug(f"Adding '{paramName}' to argparse")
+        debug(f"Did pop('paramName) and a.get('paramName') is {a.get('paramName')}")
+        #  Guarantee at least one of these.
+        if (a.get('short') is None) and (a.get('long')  is None):
+            critical(f'One of argParserArgs options in "short" or "long" form must be present and not None: {p!r}')
+            logger.warning(f"This command line option will not be processed.")
+            continue
+        cmdArg = list()
+        # Special add_argument key processing ...
+        if a.get('short') is not None:          # This is not a keyword argument, just put it in as is.
+            cmdArg.append(f"{a.pop('short')!r}")       # put in short option and remove from {a}
+        if a.get('long') is not None:           # This is not a keyword argument, just put it in as is.
+            cmdArg.append(f"{a.pop('long')!r}")        # put in long option and remove from {a}
+        #  For some reason add_argument barfs if a type is specified and one of these store kinds is used.
+        if (a.get('action') is not None) and (a['action'] in ('store_const', 'store_true', 'store_false')):
+            if a.get('type') is not None:
+                a.pop('type')               # In this case, remove the "type" keyword
+        #  Add keyword arguments to the list of add_argument args
+        for (k, v) in a.items():                # add other keyword arguments to arg list.
+            if v is not None:
+                if k in ("type", "required"):       #  argparser add_argument keywords that do not take strings.
+                    cmdArg.append(f"{k}={v}")
+                else:
+                    cmdArg.append(f"{k}={v!r}")
+        ## put together the whole add_argument call
+        cmdArg = ', '.join(cmdArg)
+        arg = addArg.format(cmdArg=cmdArg, a=a, paramName=paramName)
+        debug(f'exec({arg})')
+        try:
+            exec(arg)
+            logger.debug(f'Successfully added command line argument option for "{paramName}""')
+        except Exception as e:
+            logger.warning(f"Trying to add arg had an exception: {e}")
+            pass
 
     debug(f"Argument parser help is:\n\n{createdParams['parser'].format_help()}")
     createdParams['args'], leftOverArgs = createdParams['parser'].parse_known_args()
