@@ -40,14 +40,70 @@ def setLoggingLevel(loggingLevel):
     #  We know about all the loggers defined for this module;
     #  so we can set the level for all of them here in one place.
     logger.setLevel(loggingLevel)
-setLoggingLevel('DEBUG')
+setLoggingLevel('NOTSET')
 
 MyPath = os.path.dirname(os.path.realpath(__file__))
 logger.debug(f'MyPath in ProgramParametersDefinitions is: {MyPath}')
 ProgName, ext = os.path.splitext(os.path.basename(sys.argv[0]))
 ProgPath = os.path.dirname(os.path.realpath(sys.argv[0]))
 
-#############  GetConfig
+validArgParserActions = ("store", "store_const", "store_true", "store_false"
+                        , "append", "append_const", "count", "extend")
+    # These arg parser actions are incompatible with also specifying a type keyword.
+argParserActionsWithNoType = ("store_const", "store_true", "store_false", "count")
+    # These arg parser keywords do not take a string as their value
+nonStringParserKeyWords = ("type", "required")
+validArgParserKeyWords = ('dest', 'action', 'default', 'nargs', 'const', 'type', 'choices', 'required', 'help', 'metavar')
+
+# with open(os.path.join(MyPath, "ProgramParamsDefs.json"), 'w') as file:
+#     json.dump(ppds, file, indent=2)
+# Doesn't work to put schema definition in a JSON file
+# since some of the keys are class objects defined in schema.
+# Can't pickle ppds either.
+ppds = {
+        Optional('ProgramDescription', default=None): str,
+        Optional('PositionalArgParserArgs', default=None): {
+              'paramName': str
+            , 'action': str
+            , Optional('nargs'): str
+            , Optional('help'): str
+            },
+        'Parameters': [{'paramName': str
+            , 'description': str
+            , Optional('intermediate'): Use(bool)       # intermediate params are for defining others and will be deleted from final dictionary.
+            , Optional('configName', default=None): Use(str.casefold)       # make sure all configNames are lower case.
+            , Optional('default', default=None): Use(str)
+            , Optional('type'): Use(str)
+            , Optional('argParserArgs', default=None):
+                { Optional('short', default=None): And(str, lambda s: s != '-h', error="The short command option '-h' is reserved for help.")
+                , Optional('long', default=None): And(str, lambda s: s != '--help', error="The long command option '--help' is reserved for help.")
+                , Optional('dest'): str
+                , Optional('action'): And(str, lambda k: k in validArgParserActions, error=f"Argparser action not one of {validArgParserActions}")
+                , Optional("default"): object
+                , Optional('nargs'): str
+                , Optional('const'): str
+                , Optional('type'): str
+                , Optional('choices'): str
+                , Optional('required'): And(str, lambda k: k in ('True', 'False'), error=f'Argparser "required" must be "True" or "False".')
+                , Optional('help'): str
+                , Optional('metavar'): str
+                }
+        } ]
+        }
+
+# ppds = [{'paramName': str
+#         , 'description': str
+#         , Optional('configName', default=None): str
+#         , Optional('default', default=None): Use(str)
+#         , Optional('type'): Use(str)
+#         , Optional('argParserArgs', default=None): { Or(Or('short', 'long'), 'cmdArg'):
+#                         (And(str, lambda s: s not in ('-h', '--help'), error="The command options cannot be '-h' or '--help"))
+#                     , 'dest': str
+#                     , 'action': str
+#                     }
+#         } ]
+
+##########################  GetConfig  ##############################
 def GetConfig(**kwargs):
     '''A dictionary with contents of ".ini" file(s) using sections related to
 the calling program is used to load values into options that may be overridden
@@ -121,58 +177,62 @@ DEFAULT CONFIG SECTIONS (in order; later sections overriding earlier ones):
             cfgDict = {**cfgDict, **cfg}    # Puts both dictionaries into one, second overriding
     return cfgDict
 
-# with open(os.path.join(MyPath, "ProgramParamsDefs.json"), 'w') as file:
-#     json.dump(ppds, file, indent=2)
-# Doesn't work to put schema definition in a JSON file
-# since some of the keys are class objects defined in schema.
-# Can't pickle ppds either.
-validArgParserActions = ("store", "store_const", "store_true", "store_false"
-                        , "append", "append_const", "count", "extend")
-# validArgParserActions = ("'store'", "'store_const'", "'store_true'", "'store_false'"
-#                         , "'append'", "'append_const'", "'count'", "'extend'")
-ppds = {
-        Optional('ProgramDescription', default=None): str,
-        Optional('PositionalArgParserArgs', default=None): {
-              'paramName': str
-            , 'action': str
-            , Optional('nargs'): str
-            , Optional('help'): str
-            },
-        'Parameters': [{'paramName': str
-            , 'description': str
-            , Optional('intermediate'): Use(bool)       # intermediate params are for defining others and will be deleted from final dictionary.
-            , Optional('configName', default=None): Use(str.casefold)       # make sure all configNames are lower case.
-            , Optional('default', default=None): Use(str)
-            , Optional('type'): Use(str)
-            , Optional('argParserArgs', default=None):
-                { Optional('short', default=None): And(str, lambda s: s != '-h', error="The short command option '-h' is reserved for help.")
-                , Optional('long', default=None): And(str, lambda s: s != '--help', error="The long command option '--help' is reserved for help.")
-                , Optional('dest'): str
-                , Optional('action'): And(str, lambda k: k in validArgParserActions, error=f"Argparser action not one of {validArgParserActions}")
-                , Optional("default"): object
-                , Optional('nargs'): str
-                , Optional('const'): str
-                , Optional('type'): str
-                , Optional('choices'): str
-                , Optional('required'): And(str, lambda k: k in ('True', 'False'), error=f'Argparser "required" must be "True" or "False".')
-                , Optional('help'): str
-                , Optional('metavar'): str
-                }
-        } ]
-        }
+##########################  GetParams  ##############################
+def GetParams(*args, **kwargs):
+    if kwargs.get('ParamPath') is not None:
+        fns = kwargs['ParamPath']
+        if isinstance(fns, str): fns = (fns,)
+    else:
+        # Look for .jsonc and .json files with our program name in the cwd.
+        fns = (f"{ProgName}*Params.toml", f"{ProgName}*Params.jsonc", f"{ProgName}*Params.json")
+        debug(f"Looking for parameter definition file in default locations:  {fns}")
+    # glob process param paths
+    import glob
+    from itertools import chain
+    flatten = chain.from_iterable
+    # Make a list of actual files to read.
+    fns = list(flatten([glob.glob(x) for x in fns]))
 
-# ppds = [{'paramName': str
-#         , 'description': str
-#         , Optional('configName', default=None): str
-#         , Optional('default', default=None): Use(str)
-#         , Optional('type'): Use(str)
-#         , Optional('argParserArgs', default=None): { Or(Or('short', 'long'), 'cmdArg'):
-#                         (And(str, lambda s: s not in ('-h', '--help'), error="The command options cannot be '-h' or '--help"))
-#                     , 'dest': str
-#                     , 'action': str
-#                     }
-#         } ]
+    debug(f"Looking for first good JSON or TOML parameters file in {fns!r}")
+    if fns is None: return None, None     # no paramDefs, and no files to read it from.
+    for fn in fns:
+        try:
+            debug(f"Trying to load parameters from file: {fn}")
+            fnExt = os.path.splitext(fn)[1]
+            if fnExt == ".json" or fnExt == ".jsonc":
+                paramDefs = commentjson.load(open(fn))
+            elif fnExt == ".toml":
+                paramDefs = toml.load(fn)
+            else:
+                critical(f"Unrecognized file type from which to load parameters: {fnExt}")
+                return None, fn
+            debug(f"Successfully loaded paramDefs: {paramDefs}\n\nFrom file {fn}")
+            break       #  exit the for loop without doing the else clause.
+        except json.JSONDecodeError as e:
+            info(f"Json file: {fn} did not load successfully: {e}")
+        except FileNotFoundError as f:
+            info(f"Param file: {fn} does not exist. {f}")
+        except IsADirectoryError as d:
+            info(f"Param file: {fn} is a directory! {d}")
+        except toml.TomlDecodeError as t:
+            info(f"Toml file: {fn} did not load successfully: {t}")
+    else: return None, None
+    return paramDefs, fn
 
+'''
+We see this code several times below.
+        for (k, v) in a.items():                # add other keyword arguments to arg list.
+            if (k not in validArgParserKeyWords) or (v is None): continue
+
+The equivalent code in one for statement is:
+        for (k,v) in filter(lambda x: (x[0] in validArgParserKeyWords) and (x[1] is not None), a.items()):
+
+So what's happening in the fancy for construct is that the "x" in the lambda function gets
+the list items returned by a.items().  x[0] is the key part, and x[1] is the value part.
+I think the first form is much more understandable.
+'''
+
+##########################  MakeParams  ##############################
 def MakeParams(*args, **kwargs):        # args is a list of non-keyword arguments; kwargs is a dict of keyword args.
     '''Top level function to create a dictionary of parameters from a JSON params file and .ini files.
 
@@ -202,8 +262,11 @@ Get a couple command line arguments before proceeding:
     paramDefs           => Use this dictionary for parameter definitions instead of reading from a file.
     ProgramDocString    => Additional documentation to include in the help message.
 '''
+    ## need to find out what's going on with the logger:
+    print(f"logger is {logger.__dict__!r}")
 
     if kwargs.get('loggingLevel') is not None:
+        debug(f"In MakeParams, setting log level to {kwargs.get('loggingLevel')} from kwargs.")
         setLoggingLevel(kwargs.get('loggingLevel'))
 
     BoilerPlateArgs = toml.loads('''##  These argparser args are evaluated before the Parameters
@@ -243,7 +306,7 @@ paramName = "DefaultLoggingLevel"
 long = "--DefaultLoggingLevel"
 type = "int"
 help = "Verbosity level starting point for Verbosity."
-default = "logging.INFO"
+default = 20                #  "logging.INFO"
 dest = "DefaultLoggingLevel"
 action = "store"
 
@@ -273,6 +336,7 @@ paramName = "VerbosityLevelMultiplier"
 type = "int"
 help = "The difference in various logging levels. (Modify at your own risk.)"
 default = 10
+dest = "VerbosityLevelMultiplier"
 action = "store"
 long = "--VerbosityLevelMultiplier"
 ''')['BoilerPlateArgParserArgs']
@@ -308,7 +372,7 @@ except:
 pass
 '''
     for a in BoilerPlateArgs:
-        paramName = a['paramName']
+        paramName = a.get('paramName')
         debug(f"Adding '{paramName}' to argparse")
         #  Guarantee at least one of these.
         if (a.get('short') is None) and (a.get('long')  is None):
@@ -318,23 +382,20 @@ pass
         cmdArg = list()
         # Special add_argument key processing ...
         if a.get('short') is not None:          # This is not a keyword argument, just put it in as is.
-            cmdArg.append(f"{a.pop('short')!r}")       # put in short option and remove from {a}
+            cmdArg.append(f"{a.get('short')!r}")       # put in short option
         if a.get('long') is not None:           # This is not a keyword argument, just put it in as is.
-            cmdArg.append(f"{a.pop('long')!r}")        # put in long option and remove from {a}
+            cmdArg.append(f"{a.get('long')!r}")        # put in long option
         #  For some reason add_argument barfs if a type is specified and one of these store kinds is used.
-        if (a.get('action') is not None) and (a['action'] in ('store_const', 'store_true', 'store_false')):
-            if a.get('type') is not None:
-                a.pop('type')               # In this case, remove the "type" keyword
+        if (a.get('action') is not None) and (a['action'] in argParserActionsWithNoType) and (a.get('type') is not None):
+            a.pop('type')               # In this case, remove the "type" keyword
         #  Add keyword arguments to the list of add_argument args
         for (k, v) in a.items():                # add other keyword arguments to arg list.
-            if v is not None:
-                if k in ("type", "required"):       #  argparser add_argument keywords that do not take strings.
-                    cmdArg.append(f"{k}={v}")
-                else:
-                    cmdArg.append(f"{k}={v!r}")
+            if (k not in validArgParserKeyWords) or (v is None): continue
+            if k in nonStringParserKeyWords: cmdArg.append(f"{k}={v}")
+            else:  cmdArg.append(f"{k}={v!r}")
         ## put together the whole add_argument call
         cmdArg = ', '.join(cmdArg)
-        arg = addArg.format(cmdArg=cmdArg, a=a, paramName=paramName)
+        arg = addArg.format(cmdArg=cmdArg, paramName=paramName)
         debug(f'exec({arg})')
         try:
             exec(arg)
@@ -343,16 +404,8 @@ pass
             logger.warning(f"Trying to add arg had an exception: {e}")
             pass
 
-    # TempParser.add_argument("--configPaths", action="extend", nargs="+", type=str)
-    # TempParser.add_argument("--configSections", action="extend", nargs="+", type=str)
-    # TempParser.add_argument("--ParamPath", action="extend", nargs="+", type=str)
-    # TempParser.add_argument("--DefaultLoggingLevel", action="store", type=int, default=logging.INFO)
-    # TempParser.add_argument("-v", "--verbosity", dest="verbosity", action="count", type=int, default=0)
-    # TempParser.add_argument("-q", "--quiet", dest="Quietude", action="count", type=int, default=0)
-    # VerbosityLevelMultiplier = 10
-
-
     cmdArgs, leftOverArgs = TempParser.parse_known_args()      # get these config options
+    argVars = vars(cmdArgs)        #  This gives dictionary access to cmdArgs which is a namespace.
     debug(f"The BoilerPlateArgs options are: {cmdArgs}")
     debug(f"The (so far) unprocessed command line options are: {leftOverArgs}")
     ## Re-create sys.argv without the options that we have already processed.
@@ -363,70 +416,34 @@ pass
     TempPath.extend(leftOverArgs)   # put all the others on the end.
     sys.argv = TempPath             # Recreate sys.argv, without the ones we may have captured.
 
-    ## If any of these options exist, include them in kwargs so others will get them too.
-    for a in BoilerPlateArgs:
-        paramName = a.pop('paramName')
-        if (kwargs.get(paramName) is None) and (cmdArgs[a['dest']] is not None):
-            kwargs[paramName] = cmdArgs[a['dest']]
-        debug(f"kwargs['{paramName}'] is {kwargs.get(f'{paramName}')}")
     kwargs['BoilerPlateArgs'] = BoilerPlateArgs
 
     #  Set logging level according to kwargs & cmd line options.
-    if kwargs['loggingLevel'] is None: kwargs['loggingLevel'] = kwargs['DefaultLoggingLevel']
-    kwargs['loggingLevel'] = kwargs['loggingLevel'] - (kwargs['Verbosity'] + kwargs['Quietude']) * kwargs['VerbosityLevelMultiplier']
+    if kwargs.get('loggingLevel') is None: kwargs['loggingLevel'] = argVars['DefaultLoggingLevel']
+    kwargs['loggingLevel'] = argVars['DefaultLoggingLevel'] - (argVars['Verbosity'] + argVars['Quietude']) * argVars['VerbosityLevelMultiplier']
     setLoggingLevel(kwargs.get('loggingLevel'))
     debug(f"After initial processing, MakeParams has kwargs: {kwargs}")
-    # if cmdArgs.configPaths is not None: kwargs['configPaths'] = cmdArgs.configPaths
-    # if cmdArgs.configSections is not None: kwargs['configSections'] = cmdArgs.configSections
-    # if cmdArgs.ParamPath is not None: kwargs['ParamPath'] = cmdArgs.ParamPath
-    # debug(f"kwargs['configPaths'] is {kwargs.get('configPaths')}")
-    # debug(f"kwargs['configSections'] is {kwargs.get('configSections')}")
-    # debug(f"kwargs['ParamPath'] is {kwargs.get('ParamPath')}")
 
+    paramFile = "from kwargs['paramDefs']"      # A string describing the source, in this case, not a file name.
     paramDefs = kwargs.get('paramDefs')
     if paramDefs is None:   # Only go read the file if we didn't get paramDefs as a keyword argument
-        if kwargs.get('ParamPath') is not None:
-            fns = kwargs['ParamPath']
-            if isinstance(fns, str): fns = (fns,)
-        else:
-            # Look for .jsonc and .json files with our program name in the cwd.
-            fns = (f"{ProgName}*Params.toml", f"{ProgName}*Params.jsonc", f"{ProgName}*Params.json")
-        # glob process param paths
-        import glob
-        from itertools import chain
-        flatten = chain.from_iterable
-        # Make a list of actual files to read.
-        fns = list(flatten([glob.glob(x) for x in fns]))
-
-        debug(f"Looking for first good JSON or TOML parameters file in {fns!r}")
-        if fns is None: return None     # no paramDefs, and no files to read it from.
-        for fn in fns:
-            try:
-                debug(f"Trying to load parameters from file: {fn}")
-                fnExt = os.path.splitext(fn)[1]
-                if fnExt == ".json" or fnExt == ".jsonc":
-                    paramDefs = commentjson.load(open(fn))
-                elif fnExt == ".toml":
-                    paramDefs = toml.load(fn)
-                else:
-                    critical(f"Unrecognized file type from which to load parameters: {fnExt}")
-                    return None
-                debug(f"Successfully loaded paramDefs: {paramDefs}")
-                break       #  exit the for loop without doing the else clause.
-            except json.JSONDecodeError as e:
-                info(f"Json file: {fn} did not load successfully: {e}")
-            except FileNotFoundError as f:
-                info(f"Param file: {fn} does not exist. {f}")
-            except IsADirectoryError as d:
-                info(f"Param file: {fn} is a directory! {d}")
-            except toml.TomlDecodeError as t:
-                info(f"Toml file: {fn} did not load successfully: {t}")
-        else: return None
+        paramDefs, paramFile = GetParams(*args, **kwargs)   # GetParams returns a dictionary and the file from which it was read.
 
     paramDefs = ValidateParamDefs(paramDefs, *args, **kwargs)    # returns None if invalid
     debug(f'Validated paramDefs is {paramDefs!r}\n')
-    return createParams(paramDefs, *args, **kwargs)  #  CreateParams returns None if given None
+    paramDefs = createParams(paramDefs, *args, **kwargs)  #  CreateParams returns None if given None
+    paramDefs['paramFile'] = paramFile
 
+    ## If any of these options exist, include them in paramDefs so callers will get them too.
+    for a in BoilerPlateArgs:
+        paramName = a['paramName']
+        if (paramDefs.get(paramName) is None) and (argVars[a.get('dest')] is not None):
+            paramDefs[paramName] = argVars[a['dest']]
+        debug(f"paramDefs['{paramName}'] is {paramDefs.get(f'{paramName}')}")
+
+    return paramDefs
+
+##########################  ValidateParamDefs  ##############################
 def ValidateParamDefs(paramDefs=None, *args, **kwargs):
     if kwargs.get('loggingLevel') is not None:
         setLoggingLevel(kwargs.get('loggingLevel'))
@@ -446,6 +463,7 @@ def ValidateParamDefs(paramDefs=None, *args, **kwargs):
         return None
     return ParamDefs
 
+##########################  createParams  ##############################
 def createParams(paramDefs=None, *args, **kwargs):
     '''Create a dictionary of parameters and values from a validated param definitions dictionary.
 
@@ -458,30 +476,17 @@ def createParams(paramDefs=None, *args, **kwargs):
     if kwargs.get('loggingLevel') is not None:
         setLoggingLevel(kwargs.get('loggingLevel'))
 
+    debug(f"In CreateParams, kwargs['BoilerPlateArgs'] is {kwargs['BoilerPlateArgs']}")
+
     if paramDefs is None:
         if kwargs.get('paramDefs')is not None:
             paramDefs = kwargs['paramDefs']
         else:
             return None
 
-    # class BlankLinesHelpFormatter (argparse.HelpFormatter):
-    #     # # add empty line if help ends with \n
-    #     # def _split_lines(self, text, width):
-    #     #     lines = super()._split_lines(text, width)
-    #     #     if text.endswith('\n'):
-    #     #         lines += ['']
-    #     #     return lines
-    #     def _split_lines(self, text, width):
-    #         return text.splitlines()
-
     progDescription = paramDefs.get('ProgramDescription') or ""   #  Used for help text only.
 
     progEpilog = ""
-    ######## Was hoping to use ArgumentParser(epilog=str) to give more information from
-    ######## GetConfig using its __doc__ string, but ArgumentParser strips formatting from
-    ######## epilog string, so the additional info is useless.
-    ## --- FIXED ---: Use    argparse.ArgumentParser(..., formatter_class=argparse.RawDescriptionHelpFormatter, ... )
-
     if GetConfig.__doc__ is not None:
         # debug.info(GetConfig.__doc__)   # shows what it really looks like
         progEpilog += f'{GetConfig.__doc__}'
@@ -503,28 +508,10 @@ def createParams(paramDefs=None, *args, **kwargs):
                 items = getattr(namespace, self.dest) or []
                 items.extend(values)
                 setattr(namespace, self.dest, items)
-
         parser.register('action', 'extend', ExtendAction)
 
-    debug(f"Adding any PositionalArgParserArgs to parser.")
-    if paramDefs.get('PositionalArgParserArgs') is not None:
-        debug(f"There is a PositionalArgParserArgs section of the parameters.")
-        p = paramDefs.get('PositionalArgParserArgs')
-        cmdArg = [f"{p.pop('paramName')!r}", ]     # get param name which is guaranteed to exist by validation
-        # Make sure paramName is first argument to add_argument.
-        for (k, v) in p.items():
-            if v is not None:
-                cmdArg.append(f"{k}={v!r}")
-        cmdArg = ", ".join(cmdArg)
-        debug(f"Executing parser.add_argument({cmdArg})")
-        exec(f"parser.add_argument({cmdArg})")
-
-    # parser.add_argument("--ParamPath", action="append", nargs="+", type=str
-    #     , help='Give multiple times to make a list of paths to .toml or .jsonc or .json parameter definition files.  The first successful load wins.\n')
-    # parser.add_argument("--configPaths", action="append", nargs="+", type=str
-    #     , help='Give multiple times to make a list of paths to configuration ".ini" files.\n')
-    # parser.add_argument("--configSections", action="append", nargs="+", type=str
-    #     , help='Give multiple times to make a list of configuration sections to load from .ini files.\n')
+    ## This is a multi-line string into which data is stuffed before being "exec"uted .
+    ## A multi-line string is the only way a try: clause can be executed in an exec function.
     addArg = '''try:
     parser.add_argument({cmdArg})
 except:
@@ -532,6 +519,21 @@ except:
     raise
 pass
 '''
+
+    debug(f"Adding any PositionalArgParserArgs to parser.")
+    if paramDefs.get('PositionalArgParserArgs') is not None:
+        debug(f"There is a PositionalArgParserArgs section of the parameters.")
+        p = paramDefs.get('PositionalArgParserArgs')
+        paramName = p.get('paramName')
+        # Make sure paramName is first argument to add_argument.
+        cmdArg = [f"{paramName!r}", ]     # get param name which is guaranteed to exist by validation
+        for (k, v) in p.items():
+            if (k not in validArgParserKeyWords) or (v is None): continue
+            if k in nonStringParserKeyWords: cmdArg.append(f"{k}={v}")
+            else:  cmdArg.append(f"{k}={v!r}")
+        cmdArg = addArg.format(cmdArg=", ".join(cmdArg), paramName=paramName)
+        debug(f"Executing {cmdArg}")
+        exec(cmdArg)
 
     createdParams = { 'parser': parser
             , 'cfg': GetConfig(**kwargs)}   # configPaths passed as keyword arg if not default.
@@ -574,23 +576,20 @@ pass
             cmdArg = list()
             # Special add_argument key processing ...
             if a.get('short') is not None:          # This is not a keyword argument, just put it in as is.
-                cmdArg.append(f"{a.pop('short')!r}")       # put in short option and remove from {a}
+                cmdArg.append(f"{a.get('short')!r}")       # put in short option and remove from {a}
             if a.get('long') is not None:           # This is not a keyword argument, just put it in as is.
-                cmdArg.append(f"{a.pop('long')!r}")        # put in long option and remove from {a}
+                cmdArg.append(f"{a.get('long')!r}")        # put in long option and remove from {a}
             #  For some reason add_argument barfs if a type is specified and one of these store kinds is used.
-            if (a.get('action') is not None) and (a['action'] in ('store_const', 'store_true', 'store_false')):
-                if a.get('type') is not None:
-                    a.pop('type')               # In this case, remove the "type" keyword
+            if (a.get('action') is not None) and (a['action'] in argParserActionsWithNoType) and (a.get('type') is not None):
+                a.pop('type')               # In this case, remove the "type" keyword
 
             if (a.get('help') is None) and (p.get('description') is not None):
                 a['help'] = f"{p['description']!r}"        # Default the help string from parameter description
             #  Add keyword arguments to the list of add_argument args
             for (k, v) in a.items():                # add other keyword arguments to arg list.
-                if v is not None:
-                    if k in ("type", "required"):       #  argparser add_argument keywords that do not take strings.
-                        cmdArg.append(f"{k}={v}")
-                    else:
-                        cmdArg.append(f"{k}={v!r}")
+                if (k not in validArgParserKeyWords) or (v is None): continue
+                if k in nonStringParserKeyWords: cmdArg.append(f"{k}={v}")
+                else:  cmdArg.append(f"{k}={v!r}")
             ## put together the whole add_argument call
             cmdArg = ', '.join(cmdArg)
             arg = addArg.format(cmdArg=cmdArg, a=a, paramName=paramName)
@@ -602,9 +601,9 @@ pass
                 logger.warning(f"Trying to add arg had an exception: {e}")
                 pass
     for a in kwargs['BoilerPlateArgs']:
-        paramName = a.pop('paramName')
-        debug(f"Adding '{paramName}' to argparse")
-        debug(f"Did pop('paramName) and a.get('paramName') is {a.get('paramName')}")
+        debug(f"Processing BoilerPlateArg:  {a}")
+        paramName = a.get('paramName')
+        debug(f"Adding BoilerPlateParam '{paramName}' to argparse (a is now {a}")
         #  Guarantee at least one of these.
         if (a.get('short') is None) and (a.get('long')  is None):
             critical(f'One of argParserArgs options in "short" or "long" form must be present and not None: {p!r}')
@@ -613,20 +612,17 @@ pass
         cmdArg = list()
         # Special add_argument key processing ...
         if a.get('short') is not None:          # This is not a keyword argument, just put it in as is.
-            cmdArg.append(f"{a.pop('short')!r}")       # put in short option and remove from {a}
+            cmdArg.append(f"{a.get('short')!r}")       # put in short option and remove from {a}
         if a.get('long') is not None:           # This is not a keyword argument, just put it in as is.
-            cmdArg.append(f"{a.pop('long')!r}")        # put in long option and remove from {a}
+            cmdArg.append(f"{a.get('long')!r}")        # put in long option and remove from {a}
         #  For some reason add_argument barfs if a type is specified and one of these store kinds is used.
-        if (a.get('action') is not None) and (a['action'] in ('store_const', 'store_true', 'store_false')):
-            if a.get('type') is not None:
-                a.pop('type')               # In this case, remove the "type" keyword
+        if (a.get('action') is not None) and (a['action'] in argParserActionsWithNoType) and (a.get('type') is not None):
+            a.pop('type')               # In this case, remove the "type" keyword
         #  Add keyword arguments to the list of add_argument args
         for (k, v) in a.items():                # add other keyword arguments to arg list.
-            if v is not None:
-                if k in ("type", "required"):       #  argparser add_argument keywords that do not take strings.
-                    cmdArg.append(f"{k}={v}")
-                else:
-                    cmdArg.append(f"{k}={v!r}")
+            if (k not in validArgParserKeyWords) or (v is None): continue
+            if k in nonStringParserKeyWords: cmdArg.append(f"{k}={v}")
+            else:  cmdArg.append(f"{k}={v!r}")
         ## put together the whole add_argument call
         cmdArg = ', '.join(cmdArg)
         arg = addArg.format(cmdArg=cmdArg, a=a, paramName=paramName)
@@ -637,6 +633,7 @@ pass
         except Exception as e:
             logger.warning(f"Trying to add arg had an exception: {e}")
             pass
+
 
     debug(f"Argument parser help is:\n\n{createdParams['parser'].format_help()}")
     createdParams['args'], leftOverArgs = createdParams['parser'].parse_known_args()
