@@ -27,12 +27,21 @@ errLogger = logging.getLogger("Debug  Logger")
 console = logging.getLogger("ConsoleLogger")
 '''
 
+# __all__ = (
+#       GetLoggingDict
+#     , setConsoleLoggingLevel
+#     , getConsoleLoggingLevel
+#     , setLogFileLoggingLevel
+#     , getLogFileLoggingLevel
+# )
+
 import os               #   https://docs.python.org/3/library/os.html
 import toml             #   https://github.com/uiri/toml    https://github.com/toml-lang/toml
 # comment json strips python and "//" comments form json before applying json.load routines.
 import commentjson      #   https://github.com/vaidik/commentjson       https://commentjson.readthedocs.io/en/latest/
 # Lark is used by commentjson -- import commented out, but here for documentation.
 # import lark             #   https://github.com/lark-parser/lark    https://lark-parser.readthedocs.io/en/latest/
+import logging          #   https://docs.python.org/3/library/logging.html
 
 def GetLoggingDict(ProgName: str, ProgPath: str, *args, **kwargs) -> dict :
     ##############Logging Settings##############
@@ -66,7 +75,7 @@ def GetLoggingDict(ProgName: str, ProgPath: str, *args, **kwargs) -> dict :
                 )
     for path in paths:
         if not os.path.isfile(path): continue   # ignore paths entries that are not files.
-        name, ext = os.path.splitext(path)
+        _, ext = os.path.splitext(path)
         try:
             if ext == '.toml':
                 config_dict = toml.load(path)
@@ -75,8 +84,69 @@ def GetLoggingDict(ProgName: str, ProgPath: str, *args, **kwargs) -> dict :
             else:
                 continue
             return updateLoggingDict(config_dict)
-        except Exception as e:
+        except Exception:
             print(f"Attempt to read existing file: {path} failed.  Trying another file.")
             pass
     print("Logging configuration file not found.")
     return {}
+
+def setConsoleLoggingLevel(loggingLevel, LGR=None):
+    '''
+    Find the root logger and set the logging level of the first handler to the loggingLevel.
+    '''
+    if LGR is None:
+        LGR = logging.getLogger(__name__)
+    #  We know about all the loggers defined for this module;
+    #  so we can set the level for all of them here in one place.
+    ####  Alright, I know this is flakey.  The right way to do this
+    ####  is to analyze config_dict and find out which logger handler
+    ####  is for the console.
+    ####   logger.handlers is a list that must be indexed by a number.
+    ####  You can make a dictionary of logger.handler names to indexes:
+    ####  for i, n in enumerate(config_dict['loggers']['Debug  Logger']['handlers']): d[n]=i
+    ####  "d" then looks like:  {'console': 0, 'debug_file_handler': 1}
+    ####   But then you still have to know the name of the handler you want!!
+    #>>> logger.handlers
+    ##[<StreamHandler <stdout> (NOTSET)>, <RotatingFileHandler /Volumes/UsersData/tom/Logs/HomeGraphing.log (NOTSET)>]
+    #######   ARGH  Too much for my tired brain.
+    lgr = LGR
+    while (lgr is not None) and (lgr.name is not None) and (lgr.name != 'root'): lgr = lgr.parent
+    if len(lgr.handlers) > 0:
+        lgr.handlers[0].setLevel(loggingLevel)
+    pass
+
+def setLogFileLoggingLevel(loggingLevel, LGR=None):
+    '''
+    Find the root logger and set the logging level of the second handler to the loggingLevel.
+    '''
+    if LGR is None:
+        LGR = logging.getLogger(__name__)
+    lgr = LGR
+    while (lgr is not None) and (lgr.name is not None) and (lgr.name != 'root'): lgr = lgr.parent
+    if len(lgr.handlers) > 1:
+        lgr.handlers[1].setLevel(loggingLevel)
+    pass
+
+def getConsoleLoggingLevel(loggingLevel, LGR=None):
+    '''
+    Find the root logger and get the logging level of the first handler.
+    '''
+    if LGR is None:
+        LGR = logging.getLogger(__name__)
+    lgr = LGR
+    while (lgr is not None) and (lgr.name is not None) and (lgr.name != 'root'): lgr = lgr.parent
+    if len(lgr.handlers) > 0:
+        return lgr.handlers[0].getEffectiveLevel()
+    return 0
+
+def getLogFileLoggingLevel(loggingLevel, LGR=None):
+    '''
+    Find the root logger and get the logging level of the second handler.
+    '''
+    if LGR is None:
+        LGR = logging.getLogger(__name__)
+    lgr = LGR
+    while (lgr is not None) and (lgr.name is not None) and (lgr.name != 'root'): lgr = lgr.parent
+    if len(lgr.handlers) > 1:
+        return lgr.handlers[1].getEffectiveLevel()
+    return 0
