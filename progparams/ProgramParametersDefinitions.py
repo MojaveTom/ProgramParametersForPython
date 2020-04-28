@@ -22,28 +22,25 @@ import toml             #   https://github.com/uiri/toml    https://github.com/t
 import commentjson      #   https://github.com/vaidik/commentjson       https://commentjson.readthedocs.io/en/latest/
 # Lark is used by commentjson -- import commented out, but here for documentation.
 # import lark             #   https://github.com/lark-parser/lark    https://lark-parser.readthedocs.io/en/latest/
-import logging
+import logging          #   https://docs.python.org/3/library/logging.html
                         #   https://github.com/keleshev/schema
+from progparams.GetLoggingDict import setConsoleLoggingLevel, setLogFileLoggingLevel, getConsoleLoggingLevel, getLogFileLoggingLevel
+
 from schema import Schema, And, Or, Use, Optional, SchemaError
 import argparse         #   https://docs.python.org/3/library/argparse.html
 import configparser     #   https://docs.python.org/3/library/configparser.html
 ## The following may be needed to initialize some params
 # import time             #   https://docs.python.org/3/library/time.html
 # import datetime         #   https://docs.python.org/3/library/datetime.html
+import glob
+from itertools import chain
+flatten = chain.from_iterable
 
 logger = logging.getLogger(__name__)
 debug = logger.debug
 critical = logger.critical
 info = logger.info
 
-def setLoggingLevel(loggingLevel):
-    #  We know about all the loggers defined for this module;
-    #  so we can set the level for all of them here in one place.
-    logger.setLevel(loggingLevel)
-setLoggingLevel('NOTSET')
-
-MyPath = os.path.dirname(os.path.realpath(__file__))
-logger.debug(f'MyPath in ProgramParametersDefinitions is: {MyPath}')
 ProgName, ext = os.path.splitext(os.path.basename(sys.argv[0]))
 ProgPath = os.path.dirname(os.path.realpath(sys.argv[0]))
 
@@ -128,10 +125,6 @@ DEFAULT CONFIG SECTIONS (in order; later sections overriding earlier ones):
     [<program name>/<"LOCATION" environment variable>]
     [<program name>/<"HOST" environment variable>]
 '''
-    import glob
-    from itertools import chain
-    flatten = chain.from_iterable
-
     # Pick up configPaths from kwargs or default.
     if kwargs.get('configPaths') is not None:
         fns = kwargs['configPaths']
@@ -183,15 +176,19 @@ def GetParams(*args, **kwargs):
         fns = kwargs['ParamPath']
         if isinstance(fns, str): fns = (fns,)
     else:
-        # Look for .jsonc and .json files with our program name in the cwd.
-        fns = (f"{ProgName}*Params.toml", f"{ProgName}*Params.jsonc", f"{ProgName}*Params.json")
+        # Look for .jsonc and .json files with our program name in the main program's dir then in cwd.
+        fns = [   os.path.join(ProgPath, ProgName+'*Params.toml')
+                , os.path.join(ProgPath, ProgName+'*Params.jsonc')
+                , os.path.join(ProgPath, ProgName+'*Params.json')
+                , f"{ProgName}*Params.toml"
+                , f"{ProgName}*Params.jsonc"
+                , f"{ProgName}*Params.json"
+              ]
         debug(f"Looking for parameter definition file in default locations:  {fns}")
     # glob process param paths
-    import glob
-    from itertools import chain
-    flatten = chain.from_iterable
     # Make a list of actual files to read.
     fns = list(flatten([glob.glob(x) for x in fns]))
+    debug(f"Looking for parameter definition file in default locations:  {fns}")
 
     debug(f"Looking for first good JSON or TOML parameters file in {fns!r}")
     if fns is None: return None, None     # no paramDefs, and no files to read it from.
@@ -262,12 +259,10 @@ Get a couple command line arguments before proceeding:
     paramDefs           => Use this dictionary for parameter definitions instead of reading from a file.
     ProgramDocString    => Additional documentation to include in the help message.
 '''
-    ## need to find out what's going on with the logger:
-    print(f"logger is {logger.__dict__!r}")
 
     if kwargs.get('loggingLevel') is not None:
         debug(f"In MakeParams, setting log level to {kwargs.get('loggingLevel')} from kwargs.")
-        setLoggingLevel(kwargs.get('loggingLevel'))
+        setConsoleLoggingLevel(kwargs.get('loggingLevel'))
 
     BoilerPlateArgs = toml.loads('''##  These argparser args are evaluated before the Parameters
 ##  since they may affect relavent paths and verbosity.
@@ -419,15 +414,21 @@ pass
     kwargs['BoilerPlateArgs'] = BoilerPlateArgs
 
     #  Set logging level according to kwargs & cmd line options.
-    if kwargs.get('loggingLevel') is None: kwargs['loggingLevel'] = argVars['DefaultLoggingLevel']
-    kwargs['loggingLevel'] = argVars['DefaultLoggingLevel'] - (argVars['Verbosity'] + argVars['Quietude']) * argVars['VerbosityLevelMultiplier']
-    setLoggingLevel(kwargs.get('loggingLevel'))
+    newLogLevel = argVars['DefaultLoggingLevel'] + (argVars['Quietude'] - argVars['Verbosity']) * argVars['VerbosityLevelMultiplier']
+    kwargs['loggingLevel'] = newLogLevel
+    debug(f"Computed new log level from parsed boiler plate parameters as {newLogLevel}.")
+    # debug(f"argVars['DefaultLoggingLevel']: {argVars['DefaultLoggingLevel']}; argVars['Verbosity']: {argVars['Verbosity']}; argVars['Quietude']: {argVars['Quietude']}; argVars['VerbosityLevelMultiplier']: {argVars['VerbosityLevelMultiplier']}")
+    setConsoleLoggingLevel(newLogLevel)
     debug(f"After initial processing, MakeParams has kwargs: {kwargs}")
 
     paramFile = "from kwargs['paramDefs']"      # A string describing the source, in this case, not a file name.
     paramDefs = kwargs.get('paramDefs')
     if paramDefs is None:   # Only go read the file if we didn't get paramDefs as a keyword argument
         paramDefs, paramFile = GetParams(*args, **kwargs)   # GetParams returns a dictionary and the file from which it was read.
+        debug(f'Read parameter definitions from file "{paramFile}" and got\n{paramDefs}')
+    if (paramDefs is None) or (len(paramDefs) == 0):
+        critical(f"We have no parameter definitions; just quit now.")
+        return None
 
     paramDefs = ValidateParamDefs(paramDefs, *args, **kwargs)    # returns None if invalid
     debug(f'Validated paramDefs is {paramDefs!r}\n')
@@ -446,7 +447,8 @@ pass
 ##########################  ValidateParamDefs  ##############################
 def ValidateParamDefs(paramDefs=None, *args, **kwargs):
     if kwargs.get('loggingLevel') is not None:
-        setLoggingLevel(kwargs.get('loggingLevel'))
+        # setConsoleLoggingLevel(kwargs.get('loggingLevel'))
+        pass
 
     if paramDefs is None:
         if kwargs.get('paramDefs')is not None:
@@ -474,7 +476,8 @@ def createParams(paramDefs=None, *args, **kwargs):
     Calls GetConfig with kwargs argument to load a dictionary of configuration options.
     '''
     if kwargs.get('loggingLevel') is not None:
-        setLoggingLevel(kwargs.get('loggingLevel'))
+        # setConsoleLoggingLevel(kwargs.get('loggingLevel'))
+        pass
 
     debug(f"In CreateParams, kwargs['BoilerPlateArgs'] is {kwargs['BoilerPlateArgs']}")
 
