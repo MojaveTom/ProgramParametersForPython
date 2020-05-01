@@ -103,8 +103,9 @@ def GetFunctionId() -> str:
     return f"{os.path.splitext(os.path.basename(__file__))[0]}.{inspect.currentframe().f_back.f_code.co_name}"
 
 def SetLogLevelsFromKwargs(myFunctionId, **kwargs):
+    ############# Trouble is, setting console log level from here affects file logging too.
     #  Set logging level according to kwargs & cmd line options.
-    newLogLevel = kwargs.get('loggingLevel')
+    newLogLevel = kwargs.get('BiolerPlateLoggingLevel')
     debug(f"Computed new log level from parsed boiler plate parameters as {newLogLevel}.")
     lls = (kwargs.get(f"{myFunctionId}.ConsoleLoggingLevel", None), kwargs.get(f"{myFunctionId}.FileLoggingLevel", None))
     debug(f"Function ID logging levels are: {lls!r}")
@@ -116,8 +117,8 @@ def SetLogLevelsFromKwargs(myFunctionId, **kwargs):
         setConsoleLoggingLevel(ll)
         debug(f'Console logging level set to {ll} from cmd line "KeyWordParams"')
     elif newLogLevel is not None:
-        setConsoleLoggingLevel(newLogLevel)
         debug(f'Console logging {newLogLevel} from -v,-q cmd line options.')
+        setConsoleLoggingLevel(newLogLevel)
     if (lls is not None) and (len(lls) > 1) and (lls[1] is not None):
         ll = round(int(lls[1])/llvi)*llvi        #  round to nearest multiple of LogLevelInterval
         if ll != int(lls[1]):
@@ -220,8 +221,13 @@ action = "count"
 
 ##  After all this, BoilerPlateArgs is a list of things to put in our arg parser.
 
-    ## This is a multi-line string into which data is stuffed before being "exec"uted .
-    ## A multi-line string is the only way a try: clause can be executed in an exec function.
+#  setParamFromOption defined here to protect multiline string from source
+# formatting problems. Used in createParams.
+setParamFromOption = """if args.{optDest} is not None: {paramName} = args.{optDest}
+else: debug("There is no cmd option given for {paramName}")"""
+
+## This is a multi-line string into which data is stuffed before being "exec"uted .
+## A multi-line string is the only way a try: clause can be executed in an exec function.
 addArg = '''try:
     parser.add_argument({cmdArg})
 except:
@@ -346,19 +352,20 @@ DEFAULT CONFIG SECTIONS (in order; later sections overriding earlier ones):
         cfgDict = dict()        # empty dict
 
         cfgFilesUsed = config.read(configPaths) # reads all configPaths, returns ones used.
-        info(f'Using configuration file(s) at: {cfgFilesUsed}')
+        debug(f'Using configuration file(s) at: {cfgFilesUsed}')
         if len(config) == 0:        # nothing loaded into config (which looks like a dict)
             return cfgDict          # return empty dict
 
         for cfgSection in cfgSections:
             if cfgSection in config:
-                info(f"Reading INI file section: {cfgSection}")
+                debug(f"Reading INI file section: {cfgSection}")
                 cfg = config[cfgSection]        # saved as variable so could print in debugging
                 cfgDict = {**cfgDict, **cfg}    # Puts both dictionaries into one, second overriding
         return cfgDict
     finally:        # Restore logging levels to what they were when we began.
-        setConsoleLoggingLevel(consoleLogLevel)
-        setLogFileLoggingLevel(fileLogLevel)
+        # setConsoleLoggingLevel(consoleLogLevel)
+        # setLogFileLoggingLevel(fileLogLevel)
+        pass
 
 ##########################  GetParams  ##############################
 def GetParams(*args, **kwargs):
@@ -416,9 +423,10 @@ def GetParams(*args, **kwargs):
         else: return None, None
         return paramDefs, fn
     finally:        # Restore logging levels to what they were when we began.
-        setConsoleLoggingLevel(consoleLogLevel)
-        setLogFileLoggingLevel(fileLogLevel)
+        # setConsoleLoggingLevel(consoleLogLevel)
+        # setLogFileLoggingLevel(fileLogLevel)
         debug(f"Restored log levels are console: {consoleLogLevel}, file: {fileLogLevel}")
+        pass
 
 '''
 We see this code several times below.
@@ -515,6 +523,7 @@ Get a couple command line arguments before proceeding:
         '''
 
         addBoilerPlateArgs(parser)
+        # Done again because addBoilerPlateArgs may have changed logging levels
         if kwargs.get('loggingLevel') is not None:
             setConsoleLoggingLevel(kwargs.get('loggingLevel'))
 
@@ -550,9 +559,10 @@ Get a couple command line arguments before proceeding:
         #   ProgramParametersDefinitions.MakeParams.FileLoggingLevel
         #           ---   or   ---
         # from boiler plate verbosity options -v and -q
-        newLogLevel = int(argVars['DefaultLoggingLevel']) + (int(argVars['Quietude']) - int(argVars['Verbosity'])) * kwargs['LogLevelInterval']
-        kwargs['loggingLevel'] = newLogLevel
-        SetLogLevelsFromKwargs(myFunctionId, **kwargs)
+        if (int(argVars['Quietude']) != 0) or (int(argVars['Verbosity']) != 0):
+            newLogLevel = int(argVars['DefaultLoggingLevel']) + (int(argVars['Quietude']) - int(argVars['Verbosity'])) * kwargs['LogLevelInterval']
+            kwargs['BiolerPlateLoggingLevel'] = newLogLevel
+        SetLogLevelsFromKwargs(myFunctionId, **kwargs)  # Trouble is, setting console log level from here affects file logging too.
 
         paramFile = "from kwargs['paramDefs']"      # A string describing the source, in this case, not a file name.
         paramDefs = kwargs.get('paramDefs')
@@ -580,8 +590,9 @@ Get a couple command line arguments before proceeding:
 
         return paramDefs
     finally:        # Restore logging levels to what they were when we began.
-        setConsoleLoggingLevel(consoleLogLevel)
-        setLogFileLoggingLevel(fileLogLevel)
+        # setConsoleLoggingLevel(consoleLogLevel)
+        # setLogFileLoggingLevel(fileLogLevel)
+        pass
 
 ##########################  ValidateParamDefs  ##############################
 def ValidateParamDefs(paramDefs=None, *args, **kwargs):
@@ -609,8 +620,9 @@ def ValidateParamDefs(paramDefs=None, *args, **kwargs):
             return None
         return ParamDefs
     finally:        # Restore logging levels to what they were when we began.
-        setConsoleLoggingLevel(consoleLogLevel)
-        setLogFileLoggingLevel(fileLogLevel)
+        # setConsoleLoggingLevel(consoleLogLevel)
+        # setLogFileLoggingLevel(fileLogLevel)
+        pass
 
 ##########################  createParams  ##############################
 def createParams(paramDefs=None, *args, **kwargs):
@@ -781,8 +793,7 @@ def createParams(paramDefs=None, *args, **kwargs):
                     optDest = a['dest']
                     debug(f"Trying for command line arg............ {optDest}")
                     ## Multi-line exec string must obey indenting rules too.
-                    arg = f"""if args.{optDest} is not None: {paramName} = args.{optDest}
-    else: debug("There is no cmd option given for {paramName}")"""
+                    arg = setParamFromOption.format(optDest=optDest, paramName=paramName)
                     debug(f'exec({arg})')
                     exec(arg, globals(), createdParams)
                     debug(f"{paramName} is %s"%eval(f"{paramName}", globals(), createdParams))
@@ -797,5 +808,6 @@ def createParams(paramDefs=None, *args, **kwargs):
         # Return the final product.
         return createdParams
     finally:        # Restore logging levels to what they were when we began.
-        setConsoleLoggingLevel(consoleLogLevel)
-        setLogFileLoggingLevel(fileLogLevel)
+        # setConsoleLoggingLevel(consoleLogLevel)
+        # setLogFileLoggingLevel(fileLogLevel)
+        pass
