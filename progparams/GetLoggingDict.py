@@ -95,35 +95,38 @@ def setConsoleLoggingLevel(loggingLevel, LGR=None):
     Find the root logger and set the logging level of each StreamHandler to the loggingLevel.
     '''
     if LGR is None:
-        LGR = logging.getLogger(__name__)
+        LGR = logging.getLogger("root")   #        LGR = logging.getLogger(__name__)
     lgr = LGR
     while (lgr is not None) and (lgr.propagate) and (lgr.parent is not None): lgr = lgr.parent
-    for h in lgr.handlers:
-        if isinstance(h, logging.StreamHandler):  h.setLevel(loggingLevel)
-    pass
+    if lgr.handlers is not None:
+        for h in lgr.handlers:
+            if isinstance(h, logging.StreamHandler):  h.setLevel(loggingLevel)
+        pass
 
 def setLogFileLoggingLevel(loggingLevel, LGR=None):
     '''
     Find the root logger and set the logging level of each FileHandler to the loggingLevel.
     '''
     if LGR is None:
-        LGR = logging.getLogger(__name__)
+        LGR = logging.getLogger("root")   #        LGR = logging.getLogger(__name__)
     lgr = LGR
     while (lgr is not None) and (lgr.propagate) and (lgr.parent is not None): lgr = lgr.parent
-    for h in lgr.handlers:
-        if isinstance(h, logging.FileHandler):  h.setLevel(loggingLevel)
-    pass
+    if lgr.handlers is not None:
+        for h in lgr.handlers:
+            if isinstance(h, logging.FileHandler):  h.setLevel(loggingLevel)
+        pass
 
 def getConsoleLoggingLevel(LGR=None):
     '''
     Find the root logger and get the logging level of the first StreamHandler.
     '''
     if LGR is None:
-        LGR = logging.getLogger(__name__)
+        LGR = logging.getLogger("root")   #        LGR = logging.getLogger(__name__)
     lgr = LGR
     while (lgr is not None) and (lgr.propagate) and (lgr.parent is not None): lgr = lgr.parent
-    for h in lgr.handlers:
-        if isinstance(h, logging.StreamHandler):  return lgr.getEffectiveLevel()
+    if lgr.handlers is not None:
+        for h in lgr.handlers:
+            if isinstance(h, logging.StreamHandler):  return lgr.getEffectiveLevel()
     return None
 
 def getLogFileLoggingLevel(LGR=None):
@@ -131,9 +134,10 @@ def getLogFileLoggingLevel(LGR=None):
     Find the root logger and get the logging level of the first FileHandler.
     '''
     if LGR is None:
-        LGR = logging.getLogger(__name__)
+        LGR = logging.getLogger("root")   #        LGR = logging.getLogger(__name__)
     lgr = LGR
     while (lgr is not None) and (lgr.propagate) and (lgr.parent is not None): lgr = lgr.parent
-    for h in lgr.handlers:
-        if isinstance(h, logging.FileHandler):  return lgr.getEffectiveLevel()
+    if lgr.handlers is not None:
+        for h in lgr.handlers:
+            if isinstance(h, logging.FileHandler):  return lgr.getEffectiveLevel()
     return None
