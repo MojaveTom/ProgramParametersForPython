@@ -92,61 +92,48 @@ def GetLoggingDict(ProgName: str, ProgPath: str, *args, **kwargs) -> dict :
 
 def setConsoleLoggingLevel(loggingLevel, LGR=None):
     '''
-    Find the root logger and set the logging level of the first handler to the loggingLevel.
+    Find the root logger and set the logging level of each StreamHandler to the loggingLevel.
     '''
     if LGR is None:
         LGR = logging.getLogger(__name__)
-    #  We know about all the loggers defined for this module;
-    #  so we can set the level for all of them here in one place.
-    ####  Alright, I know this is flakey.  The right way to do this
-    ####  is to analyze config_dict and find out which logger handler
-    ####  is for the console.
-    ####   logger.handlers is a list that must be indexed by a number.
-    ####  You can make a dictionary of logger.handler names to indexes:
-    ####  for i, n in enumerate(config_dict['loggers']['Debug  Logger']['handlers']): d[n]=i
-    ####  "d" then looks like:  {'console': 0, 'debug_file_handler': 1}
-    ####   But then you still have to know the name of the handler you want!!
-    #>>> logger.handlers
-    ##[<StreamHandler <stdout> (NOTSET)>, <RotatingFileHandler /Volumes/UsersData/tom/Logs/HomeGraphing.log (NOTSET)>]
-    #######   ARGH  Too much for my tired brain.
     lgr = LGR
-    while (lgr is not None) and (lgr.name is not None) and (lgr.name != 'root'): lgr = lgr.parent
-    if len(lgr.handlers) > 0:
-        lgr.handlers[0].setLevel(loggingLevel)
+    while (lgr is not None) and (lgr.propagate) and (lgr.parent is not None): lgr = lgr.parent
+    for h in lgr.handlers:
+        if isinstance(h, logging.StreamHandler):  h.setLevel(loggingLevel)
     pass
 
 def setLogFileLoggingLevel(loggingLevel, LGR=None):
     '''
-    Find the root logger and set the logging level of the second handler to the loggingLevel.
+    Find the root logger and set the logging level of each FileHandler to the loggingLevel.
     '''
     if LGR is None:
         LGR = logging.getLogger(__name__)
     lgr = LGR
-    while (lgr is not None) and (lgr.name is not None) and (lgr.name != 'root'): lgr = lgr.parent
-    if len(lgr.handlers) > 1:
-        lgr.handlers[1].setLevel(loggingLevel)
+    while (lgr is not None) and (lgr.propagate) and (lgr.parent is not None): lgr = lgr.parent
+    for h in lgr.handlers:
+        if isinstance(h, logging.FileHandler):  h.setLevel(loggingLevel)
     pass
 
-def getConsoleLoggingLevel(loggingLevel, LGR=None):
+def getConsoleLoggingLevel(LGR=None):
     '''
-    Find the root logger and get the logging level of the first handler.
+    Find the root logger and get the logging level of the first StreamHandler.
     '''
     if LGR is None:
         LGR = logging.getLogger(__name__)
     lgr = LGR
-    while (lgr is not None) and (lgr.name is not None) and (lgr.name != 'root'): lgr = lgr.parent
-    if len(lgr.handlers) > 0:
-        return lgr.handlers[0].getEffectiveLevel()
-    return 0
+    while (lgr is not None) and (lgr.propagate) and (lgr.parent is not None): lgr = lgr.parent
+    for h in lgr.handlers:
+        if isinstance(h, logging.StreamHandler):  return lgr.getEffectiveLevel()
+    return None
 
-def getLogFileLoggingLevel(loggingLevel, LGR=None):
+def getLogFileLoggingLevel(LGR=None):
     '''
-    Find the root logger and get the logging level of the second handler.
+    Find the root logger and get the logging level of the first FileHandler.
     '''
     if LGR is None:
         LGR = logging.getLogger(__name__)
     lgr = LGR
-    while (lgr is not None) and (lgr.name is not None) and (lgr.name != 'root'): lgr = lgr.parent
-    if len(lgr.handlers) > 1:
-        return lgr.handlers[1].getEffectiveLevel()
-    return 0
+    while (lgr is not None) and (lgr.propagate) and (lgr.parent is not None): lgr = lgr.parent
+    for h in lgr.handlers:
+        if isinstance(h, logging.FileHandler):  return lgr.getEffectiveLevel()
+    return None
