@@ -39,8 +39,9 @@ flatten = chain.from_iterable
 
 logger = logging.getLogger(__name__)
 debug = logger.debug
-critical = logger.critical
 info = logger.info
+warning = logger.warning
+critical = logger.critical
 
 #  Defines "extend" action for argparse which was introduced in python3.8
 class ExtendAction(argparse.Action):
@@ -352,8 +353,10 @@ DEFAULT CONFIG SECTIONS (in order; later sections overriding earlier ones):
         cfgDict = dict()        # empty dict
 
         cfgFilesUsed = config.read(configPaths) # reads all configPaths, returns ones used.
-        debug(f'Using configuration file(s) at: {cfgFilesUsed}')
+        debug(f'Used configuration file(s) at: {cfgFilesUsed}')
+        if len(cfgFilesUsed) == 0: warning(f"\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n!!    NO configuration files read     !!\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
         if len(config) == 0:        # nothing loaded into config (which looks like a dict)
+            warning(f"EMPTY config info dict read from .ini files.")
             return cfgDict          # return empty dict
 
         for cfgSection in cfgSections:
@@ -506,6 +509,15 @@ Get a couple command line arguments before proceeding:
 
         myFunctionId = GetFunctionId()
         debug(f'In MakeParams, my "ID" is {myFunctionId}')
+
+        debug(f"kwargs is {kwargs}; add them to sys.argv: {sys.argv}")
+        for k,v in kwargs.items():
+            found = False
+            for a in sys.argv:
+                found |= a.startswith(f"--{k}")
+            if not found:
+                sys.argv.extend((f'--{k}={v}',))
+        debug(f"After adding kwargs to sys.argv: {sys.argv}")
 
         parser = argparse.ArgumentParser(add_help=False)
 
