@@ -8,7 +8,7 @@ setuptools.setup(
     name="progparams", # Replace with your own username
     version="0.0.1",
     author="Thomas DeMay",
-    author_email="tom@demayfamily.com",
+    author_email="tom@demayfamily.net",
     description="Functions to create and initialize program parameters.",
     long_description=long_description,
     long_description_content_type="text/markdown",
